@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Success Dashboard with ML</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Proper Machine Learning Library -->
+    <script src="https://www.lactame.com/lib/ml/6.0.0/ml.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease-in-out;
+        }
+        .card:hover {
+             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+        }
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 140px;
+            background-color: #555;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px;
+            position: absolute;
+            z-index: 10;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -70px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 0.75rem;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        /* Custom scrollbar for a cleaner look */
+        #atRiskList::-webkit-scrollbar {
+            width: 6px;
+        }
+        #atRiskList::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 10px;
+        }
+        #atRiskList::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        #atRiskList::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">AI-based Drop-Out & Counselling System</h1>
+            <p class="text-gray-600 mt-2 max-w-2xl mx-auto">
+                A proactive system to identify at-risk students and provide actionable insights.
+            </p>
+        </header>
+
+        <main>
+            <!-- Data Upload Section -->
+            <div class="card p-6 mb-8 max-w-lg mx-auto">
+                <h2 class="text-xl font-semibold mb-4 text-center">Upload Your Dataset</h2>
+                <p class="text-sm text-center text-gray-500 mb-4">Upload a CSV or XLSX file to train the ML model and analyze student risk.</p>
+                <div class="flex items-center justify-center bg-gray-50 p-4 rounded-lg border-2 border-dashed border-gray-300">
+                    <input type="file" id="csvFile" accept=".csv,.xlsx" class="block w-full text-sm text-gray-500
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-full file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-violet-50 file:text-violet-700
+                        hover:file:bg-violet-100 cursor-pointer"/>
+                </div>
+                 <button id="generateSample" class="w-full mt-4 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-lg transition-colors">
+                    Download Sample CSV
+                </button>
+            </div>
+
+            <!-- Dashboard Display -->
+            <div id="dashboard" class="grid grid-cols-1 lg:grid-cols-3 gap-8 hidden">
+                <!-- At-Risk Students List -->
+                <div class="lg:col-span-1 card p-6">
+                    <h3 class="text-lg font-semibold mb-4 border-b pb-2">At-Risk Students (<span id="atRiskCount">0</span>)</h3>
+                    <div id="atRiskList" class="overflow-y-auto h-[40rem] pr-2">
+                        <!-- Student items will be injected here -->
+                    </div>
+                </div>
+                
+                <!-- Student Details View -->
+                <div class="lg:col-span-2 card p-6" id="studentDetailsContainer">
+                     <div id="placeholder" class="text-center flex flex-col justify-center items-center h-full">
+                        <svg class="w-16 h-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                        <p class="text-gray-500 mt-4">Select a student to see their details.</p>
+                    </div>
+                    <div id="studentDetails" class="hidden">
+                        <h3 class="text-xl font-semibold mb-4" id="detailsStudentId"></h3>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                            <div class="bg-blue-50 p-4 rounded-lg">
+                                <p class="text-sm text-blue-500">Attendance</p>
+                                <p class="text-2xl font-bold text-blue-800" id="detailsAttendance"></p>
+                            </div>
+                            <div class="bg-green-50 p-4 rounded-lg">
+                                <p class="text-sm text-green-500">Avg. Score</p>
+                                <p class="text-2xl font-bold text-green-800" id="detailsScore"></p>
+                            </div>
+                            <div class="bg-red-50 p-4 rounded-lg">
+                                <p class="text-sm text-red-500">Fee Pending</p>
+                                <p class="text-2xl font-bold text-red-800" id="detailsFee"></p>
+                            </div>
+                            <div class="bg-yellow-50 p-4 rounded-lg">
+                                <p class="text-sm text-yellow-500">Attempts Used</p>
+                                <p class="text-2xl font-bold text-yellow-800" id="detailsAttempts"></p>
+                            </div>
+                        </div>
+                        <div class="mt-6">
+                            <h4 class="font-semibold">Risk Analysis (Rule-Based)</h4>
+                            <div class="mt-2 p-4 bg-gray-50 rounded-lg">
+                                <p class="text-sm mb-2"><strong>Flags:</strong> <span id="detailsRules"></span></p>
+                                <div class="flex items-center">
+                                    <p class="text-sm mr-2"><strong>Concern Level:</strong></p>
+                                    <div class="w-full bg-gray-200 rounded-full h-4">
+                                        <div id="detailsRiskBar" class="bg-red-500 h-4 rounded-full" style="width: 0%;"></div>
+                                    </div>
+                                    <span id="detailsRisk" class="ml-2 font-bold text-sm"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                         <!-- ML Section -->
+                        <div class="mt-6">
+                            <h4 class="font-semibold">Machine Learning Insights</h4>
+                            <div class="mt-2 p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+                                <div class="flex justify-between items-center mb-3">
+                                    <p class="text-sm"><strong>Decision Tree Prediction:</strong></p>
+                                    <p id="mlPrediction" class="font-bold text-lg"></p>
+                                </div>
+                               <div class="border-t border-indigo-200 pt-3">
+                                    <p class="text-sm mb-2"><strong>Personalized AI Feedback & Recommendations:</strong></p>
+                                    <div id="mlFeedback" class="text-sm text-gray-700 space-y-2"></div>
+                               </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 text-center">
+                            <button id="notifyBtn" class="bg-violet-600 hover:bg-violet-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">
+                                Notify Mentor/Guardian
+                            </button>
+                            <p id="notificationStatus" class="text-sm text-green-600 mt-2 h-5"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+             <div id="error-message" class="hidden text-center text-red-500 card p-4 max-w-lg mx-auto"></div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const csvFileInput = document.getElementById('csvFile');
+            const dashboard = document.getElementById('dashboard');
+            const atRiskList = document.getElementById('atRiskList');
+            const atRiskCount = document.getElementById('atRiskCount');
+            const studentDetailsContainer = document.getElementById('studentDetailsContainer');
+            const placeholder = document.getElementById('placeholder');
+            const studentDetails = document.getElementById('studentDetails');
+            const errorMessage = document.getElementById('error-message');
+            const generateSampleBtn = document.getElementById('generateSample');
+
+            let allStudentData = [];
+            let activeStudentId = null;
+
+            const REQUIRED_HEADERS = ['Student Roll Number', 'Student Attendance', 'Average Marks', 'Fee Status', 'Attempts Exhausted', 'Student Name', 'Marks Trend', 'Professor Feedback'];
+
+            generateSampleBtn.addEventListener('click', () => {
+                const sampleData = [
+                    ['Student Name', 'Student Roll Number', 'Student Attendance', 'Average Marks', 'Fee Status', 'Attempts Exhausted', 'Marks Trend', 'Professor Feedback'],
+                    ['Riya Reddy', '2022IT0001', '78.9', '45.0', 'Paid', '1', 'Upward', 'Shows great potential but needs to participate more in class.'],
+                    ['Diya Mukherjee', '2025CS0002', '55.1', '52.2', 'Paid', '2', 'Downward', 'Struggling with core concepts, recommend extra tutoring.'],
+                    ['Kriti Khan', '2025CSE0003', '80.2', '57.6', 'Unpaid', '4', 'Stable', 'Excellent in practicals, but attendance is a concern.'],
+                ];
+                let csvContent = "data:text/csv;charset=utf-8," + sampleData.map(e => e.join(",")).join("\n");
+                var encodedUri = encodeURI(csvContent);
+                var link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", "sample_student_data.csv");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+
+            csvFileInput.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                if (file.name.toLowerCase().endsWith('.csv')) {
+                    Papa.parse(file, { header: true, skipEmptyLines: true, complete: handleParsedData });
+                } else if (file.name.toLowerCase().endsWith('.xlsx')) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, {type: 'array'});
+                        const firstSheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[firstSheetName];
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                        handleParsedData({ data: jsonData, meta: { fields: Object.keys(jsonData[0] || {}) }});
+                    };
+                    reader.readAsArrayBuffer(file);
+                }
+            });
+            
+            function handleParsedData(results) {
+                const headers = results.meta.fields;
+                if (!REQUIRED_HEADERS.every(h => headers.includes(h))) {
+                    showError(`Invalid file. Headers must include: ${REQUIRED_HEADERS.join(', ')}`);
+                    return;
+                }
+                
+                hideError();
+                let processedData = results.data.map(preprocessData);
+                allStudentData = runAnalyses(processedData);
+                displayDashboard(allStudentData);
+            }
+
+            function runAnalyses(data) {
+                // First, run the Decision Tree model to get predictions
+                const dataWithDT = runDecisionTreePrediction(data);
+
+                // Then, add rule-based analysis and AI feedback to each student object
+                return dataWithDT.map(student => {
+                    const rules = {
+                        lowAttendance: student.Attendance < 60,
+                        highAttempts: student.AttemptsUsed >= 3,
+                        sharpDropInScore: student.MarksTrend.trim().toLowerCase() === 'downward',
+                    };
+                    const isAtRisk = rules.lowAttendance || rules.highAttempts || rules.sharpDropInScore;
+                    
+                    let riskScore = 0.0;
+                    if (rules.sharpDropInScore) riskScore += 0.4;
+                    if (rules.highAttempts) riskScore += 0.3;
+                    if (rules.lowAttendance) riskScore += 0.3;
+                    const riskProbability = Math.min(riskScore, 1.0);
+
+                    const studentWithRules = { ...student, rules, riskProbability, isAtRisk };
+                    const mlFeedback = generatePersonalizedFeedback(studentWithRules);
+
+                    return { ...studentWithRules, mlFeedback };
+                });
+            }
+
+            function runDecisionTreePrediction(data) {
+                const { DecisionTreeClassifier } = ML;
+                const dt = new DecisionTreeClassifier();
+
+                // Prepare data: features (the inputs) and labels (the outputs)
+                const features = data.map(student => {
+                    let trendValue;
+                    switch (student.MarksTrend.trim().toLowerCase()) {
+                        case 'downward': trendValue = 2; break;
+                        case 'stable': trendValue = 1; break;
+                        default: trendValue = 0;
+                    }
+                    return [
+                        student.Attendance,
+                        student.AssessmentScore,
+                        student.FeePending,
+                        student.AttemptsUsed,
+                        trendValue
+                    ];
+                });
+
+                // The "labels" for training are our existing rules. The model learns from them.
+                const labels = data.map(student => 
+                    (student.Attendance < 60 || student.AttemptsUsed >= 3 || student.MarksTrend.trim().toLowerCase() === 'downward') ? 1 : 0
+                );
+                
+                // Train the model
+                dt.train(features, labels);
+
+                // Make predictions for all students
+                const predictions = dt.predict(features);
+
+                // Add the prediction back into the main student data
+                return data.map((student, index) => ({
+                    ...student,
+                    dtPrediction: predictions[index] // 1 for at-risk, 0 for safe
+                }));
+            }
+
+            function showError(message) {
+                errorMessage.textContent = message;
+                errorMessage.classList.remove('hidden');
+                dashboard.classList.add('hidden');
+            }
+
+            function hideError() {
+                errorMessage.classList.add('hidden');
+            }
+            
+            function preprocessData(row) {
+                 return {
+                    StudentID: row['Student Roll Number'] || 'N/A',
+                    StudentName: row['Student Name'] || 'Unknown',
+                    Attendance: parseFloat(row['Student Attendance']) || 0,
+                    AssessmentScore: parseFloat(row['Average Marks']) || 0,
+                    FeePending: row['Fee Status'] && row['Fee Status'].trim().toLowerCase() === 'paid' ? 0 : 1,
+                    AttemptsUsed: parseInt(row['Attempts Exhausted'], 10) || 0,
+                    MarksTrend: row['Marks Trend'] || 'Stable',
+                    ProfessorFeedback: row['Professor Feedback'] || 'No feedback.',
+                };
+            }
+            
+            function generatePersonalizedFeedback(student) {
+                let concerns = [];
+                let positives = [];
+                let recommendations = new Set(); // Use a Set to avoid duplicate recommendations
+                const studentName = student.StudentName.split(' ')[0]; // Get student's first name
+
+                // --- Analyze Concerns ---
+                if (student.rules.sharpDropInScore) {
+                    concerns.push(`a <strong>downward trend in marks</strong>`);
+                }
+                if (student.rules.lowAttendance) {
+                    concerns.push(`<strong>critically low attendance</strong> (${student.Attendance}%)`);
+                }
+                if (student.rules.highAttempts) {
+                    concerns.push(`a <strong>high number of attempts</strong> (${student.AttemptsUsed})`);
+                }
+                if (student.FeePending > 0) {
+                    concerns.push(`an <strong>unpaid fee status</strong>`);
+                }
+
+                // --- Analyze Positives ---
+                if (student.AssessmentScore >= 75) {
+                    positives.push(`maintaining a <strong>strong average score</strong> of ${student.AssessmentScore}%.`);
+                } else if (student.AssessmentScore >= 50) {
+                    positives.push(`a <strong>respectable average score</strong> of ${student.AssessmentScore}%.`);
+                }
+                if (student.MarksTrend.trim().toLowerCase() === 'upward') {
+                    positives.push(`an <strong>upward marks trend</strong>`);
+                }
+
+                // --- Generate PERSONALIZED Recommendations ---
+                // High-priority combination checks first
+                if (student.rules.lowAttendance && student.rules.sharpDropInScore) {
+                    recommendations.add(`Prioritize a meeting with ${studentName}. Address the immediate correlation between their ${student.Attendance}% attendance and the downward score trend. Create a joint attendance and study plan.`);
+                } else {
+                    // Individual checks if the combo isn't met
+                    if (student.rules.sharpDropInScore) {
+                        recommendations.add(`Investigate the cause of ${studentName}'s score drop. Review recent assignments and pinpoint specific topics of difficulty for a targeted review session.`);
+                    }
+                    if (student.rules.lowAttendance) {
+                        recommendations.add(`Discuss the impact of ${studentName}'s ${student.Attendance}% attendance on their learning. Explore the underlying reasons for their absence and set a clear attendance goal.`);
+                    }
+                }
+
+                if (student.rules.highAttempts) {
+                    let attemptRec = `With ${student.AttemptsUsed} attempts used, ${studentName} likely has foundational knowledge gaps. Assign diagnostic quizzes to identify these weaknesses and mandate targeted tutoring.`;
+                    // Make recommendation more precise if professor feedback corroborates it
+                    if (student.ProfessorFeedback.toLowerCase().includes('struggling') || student.ProfessorFeedback.toLowerCase().includes('core concepts')) {
+                        attemptRec += ` The professor's feedback confirms this is a core concept issue; focus there first.`;
+                    }
+                    recommendations.add(attemptRec);
+                }
+
+                if (student.FeePending > 0) {
+                    recommendations.add(`Gently approach ${studentName} about their pending fees. The goal is to understand if this is an external stressor. Connect them with a financial aid counselor for confidential support.`);
+                }
+
+
+                // --- Build the Final Feedback String ---
+                let analysisHTML = '';
+                let recommendationHTML = '';
+
+                if (concerns.length > 0) {
+                    analysisHTML += `<p><strong>Analysis:</strong> ${studentName} shows clear signs of academic risk. Key areas of concern include: ${concerns.join(', ')}.</p>`;
+                } else {
+                    analysisHTML += `<p><strong>Analysis:</strong> ${studentName} is performing well with no major red flags according to the data.</p>`;
+                }
+
+                if (positives.length > 0) {
+                    analysisHTML += `<p><strong>Strengths:</strong> Despite challenges, ${studentName} demonstrates strengths in ${positives.join(' and ')}.</p>`;
+                }
+
+                if (student.ProfessorFeedback && student.ProfessorFeedback !== 'No feedback.') {
+                    analysisHTML += `<p><strong>Professor's Context:</strong> "<em>${student.ProfessorFeedback}</em>".</p>`;
+                }
+
+                if (recommendations.size > 0) {
+                    recommendationHTML = `<div class="mt-3"><strong class="block mb-1">Personalized Action Plan for ${studentName}:</strong><ul class="list-disc list-inside space-y-1">${Array.from(recommendations).map(rec => `<li>${rec}</li>`).join('')}</ul></div>`;
+                } else {
+                    recommendationHTML = `<div class="mt-3"><strong>Action Plan for Mentor:</strong> Acknowledge ${studentName}'s strong performance. Discuss their goals and explore opportunities for further enrichment to maintain momentum.</div>`;
+                }
+
+                return analysisHTML + recommendationHTML;
+            }
+
+            function getRiskColor(probability) {
+                if (probability > 0.6) return 'bg-red-500';
+                if (probability > 0.3) return 'bg-orange-500';
+                return 'bg-green-500';
+            }
+
+            function displayDashboard(data) {
+                dashboard.classList.remove('hidden');
+                const atRiskStudents = data
+                    .filter(s => s.isAtRisk)
+                    .sort((a, b) => b.riskProbability - a.riskProbability);
+                
+                displayAtRiskStudents(atRiskStudents);
+                if (atRiskStudents.length > 0) {
+                    displayStudentDetails(atRiskStudents[0]);
+                } else {
+                    atRiskList.innerHTML = '<p class="text-gray-500 p-4 text-center">No at-risk students found.</p>';
+                    showPlaceholder();
+                }
+            }
+
+            function displayAtRiskStudents(students) {
+                atRiskCount.textContent = students.length;
+                atRiskList.innerHTML = '';
+                students.forEach(student => {
+                    const studentDiv = document.createElement('div');
+                    studentDiv.className = `p-3 mb-2 rounded-lg cursor-pointer flex justify-between items-center transition-colors ${activeStudentId === student.StudentID ? 'bg-violet-100' : 'hover:bg-gray-50'}`;
+                    studentDiv.dataset.id = student.StudentID;
+
+                    let riskIcons = '';
+                    if(student.rules.lowAttendance) {
+                        riskIcons += `<div class="tooltip"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg><span class="tooltiptext">Low Attendance</span></div>`;
+                    }
+                    if(student.rules.sharpDropInScore) {
+                        riskIcons += `<div class="tooltip"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" /></svg><span class="tooltiptext">Score Drop</span></div>`;
+                    }
+                    if(student.rules.highAttempts) {
+                        riskIcons += `<div class="tooltip"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M4 20h5v-5M20 4h-5v5" /></svg><span class="tooltiptext">High Attempts</span></div>`;
+                    }
+                    
+                    studentDiv.innerHTML = `
+                        <div>
+                            <p class="font-semibold text-gray-800">${student.StudentName}</p>
+                            <p class="text-sm text-gray-500">${student.StudentID}</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="flex items-center gap-2">${riskIcons}</div>
+                            <div class="w-3 h-3 rounded-full flex-shrink-0 ${getRiskColor(student.riskProbability)}"></div>
+                        </div>
+                    `;
+                    studentDiv.addEventListener('click', () => {
+                        const currentActive = document.querySelector('#atRiskList .bg-violet-100');
+                        if (currentActive) currentActive.classList.remove('bg-violet-100', 'hover:bg-gray-50');
+                        studentDiv.classList.add('bg-violet-100');
+                        studentDiv.classList.remove('hover:bg-gray-50');
+                        displayStudentDetails(student);
+                    });
+                    atRiskList.appendChild(studentDiv);
+                });
+            }
+            
+            function showPlaceholder() {
+                placeholder.classList.remove('hidden');
+                studentDetails.classList.add('hidden');
+            }
+
+            function displayStudentDetails(student) {
+                if (!student) { showPlaceholder(); return; }
+                activeStudentId = student.StudentID;
+                placeholder.classList.add('hidden');
+                studentDetails.classList.remove('hidden');
+
+                document.getElementById('detailsStudentId').textContent = `${student.StudentName} (${student.StudentID})`;
+                document.getElementById('detailsAttendance').textContent = `${student.Attendance}%`;
+                document.getElementById('detailsScore').textContent = `${student.AssessmentScore}%`;
+                document.getElementById('detailsFee').textContent = student.FeePending > 0 ? 'Pending' : 'Paid';
+                document.getElementById('detailsAttempts').textContent = student.AttemptsUsed;
+
+                const triggeredRules = Object.entries(student.rules).filter(([_, v]) => v).map(([k]) => k.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase())).join(', ') || 'None';
+                document.getElementById('detailsRules').textContent = triggeredRules;
+
+                const riskPercentage = (student.riskProbability * 100).toFixed(0);
+                document.getElementById('detailsRisk').textContent = `${riskPercentage}%`;
+                const riskBar = document.getElementById('detailsRiskBar');
+                riskBar.style.width = `${riskPercentage}%`;
+                riskBar.className = `h-4 rounded-full ${getRiskColor(student.riskProbability)}`;
+                
+                // Display ML Prediction
+                const mlPredictionEl = document.getElementById('mlPrediction');
+                if (student.dtPrediction === 1) {
+                    mlPredictionEl.textContent = 'Predicted At-Risk';
+                    mlPredictionEl.className = 'font-bold text-lg text-red-600';
+                } else {
+                    mlPredictionEl.textContent = 'Predicted Safe';
+                    mlPredictionEl.className = 'font-bold text-lg text-green-600';
+                }
+                
+                document.getElementById('mlFeedback').innerHTML = student.mlFeedback;
+
+                const notifyBtn = document.getElementById('notifyBtn');
+                const notificationStatus = document.getElementById('notificationStatus');
+                notificationStatus.textContent = '';
+                const newNotifyBtn = notifyBtn.cloneNode(true);
+                notifyBtn.parentNode.replaceChild(newNotifyBtn, notifyBtn);
+                newNotifyBtn.onclick = () => {
+                    notificationStatus.textContent = `Notification sent for ${student.StudentName}.`;
+                    setTimeout(() => notificationStatus.textContent = '', 3000);
+                };
+            }
+        });
+    </script>
+</body>
+</html>
+
+
+
